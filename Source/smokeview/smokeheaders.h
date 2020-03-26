@@ -5,6 +5,11 @@
 #include "gd.h"
 #endif
 
+EXTERNCPP int TimeAverageData(float *data_out, float *data_in, int ndata, int data_per_timestep, float *times_local, int ntimes_local, float average_time);
+#ifdef pp_READBUFFER
+bufferstreamdata *GetSMVBuffer(char *file, char *file2);
+#endif
+  EXTERNCPP void UpdateBlockType(void);
 #ifdef pp_NEWBOUND_DIALOG
 EXTERNCPP void GetSlicePercentileBounds(char *slicetype, float global_min, float global_max, float *per_min, float *per_max);
 #endif
@@ -13,9 +18,7 @@ boundsdata *GetBoundsInfo(char *shortlabel);
 void GetGlobalSliceBounds(void);
 FILE_SIZE ReadSliceUseGluiBounds(char *file, int ifile, int flag, int set_slicecolor, int *errorcode);
 #endif
-#ifdef pp_SHIFT_COLORBARS
 EXTERNCPP void ShiftColorbars(void);
-#endif
 EXTERNCPP int GetColorbarState(void);
 EXTERNCPP void ViewpointCB(int val);
 EXTERNCPP void SMV_EXIT(int code);
@@ -61,13 +64,11 @@ EXTERNCPP void UpdateCO2ColorbarList(int value);
 EXTERNCPP int GetTourFrame(tourdata *touri, int itime);
 EXTERNCPP int MeshConnect(meshdata *mesh_from, int val, meshdata *mesh_to);
 EXTERNCPP void InitNabors(void);
-#ifdef pp_HTML
 EXTERNCPP int Smv2Html(char *html_out, int option, int from_where, int vr_flag);
 EXTERNCPP int Smv2Geom(char *html_file);
 EXTERNCPP int Obst2Data(char *html_file);
 EXTERNCPP int SliceNode2Data(char *html_file, int option);
 EXTERNCPP int SliceCell2Data(char *html_file, int option);
-#endif
 EXTERNCPP void UpdateBackgroundFlip(int flip);
 EXTERNCPP void UpdateBackgroundFlip2(int flip);
 EXTERNCPP void UpdateVectorpointsize(void);
@@ -414,9 +415,7 @@ EXTERNCPP void GetSmokeSensors(void);
 EXTERNCPP void AddNewTour(void);
 EXTERNCPP void StartScript(void);
 EXTERNCPP int RunScriptCommand(scriptdata *script_command);
-#ifdef pp_HTML
 EXTERNCPP void DoScriptHtml(void);
-#endif
 EXTERNCPP int  CompileScript(char *scriptfile);
 EXTERNCPP scriptfiledata *InsertScriptFile(char *file);
 #ifdef pp_LUA
@@ -428,7 +427,6 @@ EXTERNCPP inifiledata *InsertIniFile(char *file);
 EXTERNCPP void Keyboard(unsigned char key, int flag);
 EXTERNCPP void GetNewScriptFileName(char *newscriptfilename);
 EXTERNCPP void DrawSelectAvatars(void);
-EXTERNCPP void ReadTerrain(char *file, int ifile, int flag, int *errorcode);
 EXTERNCPP void OutputFedCSV(void);
 EXTERNCPP void ParticlePropShowMenu(int value);
 EXTERNCPP int  GetGridIndex(float x, int dir, float *plotxyz, int nplotxyz);
@@ -440,8 +438,8 @@ EXTERNCPP void WuiCB(int var);
 EXTERNCPP void CompressOnOff(int flag);
 EXTERNCPP void CompressSVZip2(void);
 EXTERNCPP void UpdateTerrainColors(void);
-EXTERNCPP void DrawTerrain(terraindata *terri, int only_geom);
-EXTERNCPP void DrawTerrainTexture(terraindata *terri, int only_geom);
+EXTERNCPP void DrawTerrain(terraindata *terri);
+EXTERNCPP void DrawTerrainTexture(terraindata *terri);
 EXTERNCPP void DrawTrees(void);
 EXTERNCPP void InitCullGeom(int cullflag);
 EXTERNCPP void GetCullSkips(meshdata *meshi, int cullflag, int cull_portsize, int *iiskip, int *jjskip, int *kkskip);
@@ -818,7 +816,8 @@ EXTERNCPP void UpdateFaces(void);
 EXTERNCPP void DrawTicks(void);
 EXTERNCPP void SetStartupView(void);
 EXTERNCPP void AddListView(char *label_in);
-EXTERNCPP float *GetColorPtr(const float *color);
+EXTERNCPP float *GetColorPtr(float *color);
+EXTERNCPP float *GetColorTranPtr(float *color, float transparency);
 EXTERNCPP void ConvertColor(int flag);
 EXTERNCPP void InitCadColors(void);
 EXTERNCPP void UpdateRGBColors(int colorindex);
@@ -869,8 +868,12 @@ EXTERNCPP FILE_SIZE ReadIso(const char *file, int ifile, int flag, int *geom_fra
 
 EXTERNCPP void InitMenus(int unload);
 EXTERNCPP void SmoothLabel(float *min, float *max, int n);
-EXTERNCPP int  ReadSMV(char *file, char *file2);
-EXTERNCPP void ReadSMVDynamic(char *file);
+#ifdef pp_READBUFFER
+int ReadSMV(bufferstreamdata *stream, char *file, char *file2);
+#else
+int ReadSMV(char *file, char *file2);
+#endif
+  EXTERNCPP void ReadSMVDynamic(char *file);
 EXTERNCPP int  STRCMP(const char *s1, const char *s2);
 EXTERNCPP void OutputAxisLabels(void);
 EXTERNCPP void OutputLargeText(float x, float y, char *string);

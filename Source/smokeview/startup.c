@@ -206,15 +206,35 @@ int SetupCase(int argc, char **argv){
     else{
       input_file=smv_filename;
     }
+#ifdef pp_READBUFFER
+    {
+      bufferstreamdata *smv_streaminfo = NULL;
+
+      smv_streaminfo = GetSMVBuffer(input_file, iso_filename);
+      return_code = ReadSMV(smv_streaminfo, input_file, iso_filename);
+      FCLOSE(smv_streaminfo);
+    }
+#else
     return_code=ReadSMV(input_file,iso_filename);
+#endif
     if(return_code==0){
       ShowGluiTrainer();
       ShowGluiAlert();
     }
   }
   else{
-    input_file=smv_filename;
-    return_code=ReadSMV(input_file,iso_filename);
+    input_file = smv_filename;
+#ifdef pp_READBUFFER
+    {
+      bufferstreamdata *smv_streaminfo = NULL;
+
+      smv_streaminfo = GetSMVBuffer(input_file, iso_filename);
+      return_code = ReadSMV(smv_streaminfo, input_file, iso_filename);
+      FCLOSE(smv_streaminfo);
+    }
+#else
+    return_code = ReadSMV(input_file, iso_filename);
+#endif
   }
   switch(return_code){
     case 1:
@@ -335,7 +355,6 @@ void SetupGlut(int argc, char **argv){
 
   // create full path for html template file
 
-#ifdef pp_HTML
   NewMemory((void **)&smokeview_html, (unsigned int)(strlen(smokeview_bindir)+strlen("smokeview.html")+1));
   STRCPY(smokeview_html, smokeview_bindir);
   STRCAT(smokeview_html, "smokeview.html");
@@ -343,7 +362,6 @@ void SetupGlut(int argc, char **argv){
   NewMemory((void **)&smokeviewvr_html, (unsigned int)(strlen(smokeview_bindir)+strlen("smokeview_vr.html")+1));
   STRCPY(smokeviewvr_html, smokeview_bindir);
   STRCAT(smokeviewvr_html, "smokeview_vr.html");
-#endif
 
   startup_pass=2;
 
@@ -1074,13 +1092,6 @@ void InitOpenGL(void){
         }
       }
     }
-    for(i=0;i<nterraininfo;i++){
-      terraindata *terri;
-
-      terri = terraininfo + i;
-      if(terri->autoload==0&&terri->loaded==1)ReadTerrain(terri->file,i,UNLOAD,&errorcode);
-      if(terri->autoload==1&&terri->loaded==0)ReadTerrain(terri->file,i,LOAD,&errorcode);
-    }
     for(i=0;i<nsmoke3dinfo;i++){
       smoke3ddata *smoke3di;
 
@@ -1322,7 +1333,6 @@ void InitVars(void){
   direction_color[3]=1.0;
 
   direction_color_ptr=GetColorPtr(direction_color);
-  show_slice_terrain=0;
 
   shooter_uvw[0]=0.0;
   shooter_uvw[1]=0.0;
@@ -1514,7 +1524,6 @@ void InitVars(void){
   hrrpuv_iso_color[1]=0.5;
   hrrpuv_iso_color[2]=0.0;
   hrrpuv_iso_color[3]=1.0;
-  showterrain=0;
   showgluitrainer=0;
   colorbartype=0;
   colorbartype_ini=-1;
@@ -1749,7 +1758,7 @@ void InitVars(void){
   right_green=0.0;
   right_blue=1.0;
   apertureindex=1;
-  zoomindex=2;
+  zoomindex=ZOOMINDEX_ONE;
   projection_type=PROJECTION_PERSPECTIVE;
   apertures[0]=30.;
   apertures[1]=45.;
@@ -1758,11 +1767,13 @@ void InitVars(void){
   apertures[3]=90.;
   planar_terrain_slice=0;
 
-  zooms[0]=0.25;
-  zooms[1]=0.5;
-  zooms[2]=1.0;
-  zooms[3]=2.0;
-  zooms[4]=4.0;
+  zooms[0] = 0.25;
+  zooms[1] = 0.5;
+  zooms[2] = 1.0;
+  zooms[3] = 2.0;
+  zooms[4] = 4.0;
+  zooms[5] = 10.0;
+  zooms[MAX_ZOOMS] = -1.0;
   zoom=1.0;
   aperture = Zoom2Aperture(zoom);
   aperture_glui = aperture;
