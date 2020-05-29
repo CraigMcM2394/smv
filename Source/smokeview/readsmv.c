@@ -1861,22 +1861,27 @@ void InitTextures(void){
     ntextureinfo++;
   }
 
-  if(nterrain_texture>0){
-    char *texturefile;
-    texturedata *texti;
-    int len;
+  if(nterrain_textures>0){
+    texturedata *texture_base;
 
-    texturefile = terrain_texture->file;
-    texti = textureinfo + ntextureinfo;
-    len = strlen(texturefile);
-    NewMemory((void **)&texti->file,(len+1)*sizeof(char));
-    strcpy(texti->file,texturefile);
-    FREEMEMORY(terrain_texture);
-    terrain_texture = texti;
-    texti->loaded=0;
-    texti->used=0;
-    texti->display=0;
-    ntextureinfo++;
+    texture_base = textureinfo + ntextureinfo;
+    for(i=0;i<nterrain_textures;i++){
+      char *texturefile;
+      texturedata *texti;
+      int len;
+
+      texturefile = terrain_textures[i].file;
+      texti = textureinfo + ntextureinfo;
+      len = strlen(texturefile);
+      NewMemory((void **)&texti->file,(len+1)*sizeof(char));
+      strcpy(texti->file,texturefile);
+      texti->loaded=0;
+      texti->used=0;
+      texti->display=0;
+      ntextureinfo++;
+    }
+    FREEMEMORY(terrain_textures);
+    terrain_textures = texture_base;
   }
 
   // check to see if texture files exist .
@@ -1912,6 +1917,7 @@ void InitTextures(void){
     if(use_graphics==1){
       char *filename;
       int max_texture_size;
+      int is_transparent;
 
       CheckMemory;
       filename=strrchr(texti->file,*dirseparator);
@@ -1926,7 +1932,8 @@ void InitTextures(void){
       printf("  reading in texture image: %s",texti->file);
       glGetIntegerv(GL_MAX_TEXTURE_SIZE, &max_texture_size);
 
-      floortex=ReadPicture(texti->file,&texwid,&texht,0);
+      floortex=ReadPicture(texti->file,&texwid,&texht,&is_transparent,0);
+      texti->is_transparent = is_transparent;
       if(floortex==NULL){
         PRINTF("\n***Error: Texture %s failed to load\n", filename);
         continue;
@@ -2055,39 +2062,45 @@ void InitTextures(void){
 
   // define terrain texture
 
-  if(nterrain_texture>0&&use_graphics==1){
+  if(nterrain_textures>0&&use_graphics==1){
     texturedata *tt;
     unsigned char *floortex;
     int texwid, texht;
     int errorcode;
 
-    tt = terrain_texture;
-    tt->loaded=0;
-    tt->used=0;
-    tt->display=0;
+    for(i=0;i<nterrain_textures;i++){
+      int is_transparent;
 
-    glGenTextures(1,&tt->name);
-    glBindTexture(GL_TEXTURE_2D,tt->name);
-    floortex=NULL;
-    errorcode=1;
-    if(tt->file!=NULL){
+      tt = terrain_textures + i;
+      tt->loaded=0;
+      tt->used=0;
+      tt->display=0;
+      tt->is_transparent = 0;
+
+      glGenTextures(1,&tt->name);
+      glBindTexture(GL_TEXTURE_2D,tt->name);
+      floortex=NULL;
+      errorcode=1;
+      if(tt->file!=NULL){
 #ifdef _DEBUG
-      PRINTF("terrain texture file: %s",tt->file);
+        PRINTF("terrain texture file: %s",tt->file);
 #endif
-      floortex=ReadPicture(tt->file,&texwid,&texht,0);
-      if(floortex==NULL)PRINTF("***Error: Texture file %s failed to load\n",tt->file);
-    }
-    if(floortex!=NULL){
-      errorcode=gluBuild2DMipmaps(GL_TEXTURE_2D,4, texwid, texht, GL_RGBA, GL_UNSIGNED_BYTE, floortex);
-      if(errorcode!=0)PRINTF("***Error: Texture file %s failed to load\n",tt->file);
-    }
-    FREEMEMORY(floortex);
-    if(errorcode==0){
-      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-      tt->loaded=1;
+        floortex=ReadPicture(tt->file,&texwid,&texht,&is_transparent,0);
+        tt->is_transparent = is_transparent;
+        if(floortex==NULL)PRINTF("***Error: Texture file %s failed to load\n",tt->file);
+      }
+      if(floortex!=NULL){
+        errorcode=gluBuild2DMipmaps(GL_TEXTURE_2D,4, texwid, texht, GL_RGBA, GL_UNSIGNED_BYTE, floortex);
+        if(errorcode!=0)PRINTF("***Error: Texture file %s failed to load\n",tt->file);
+      }
+      FREEMEMORY(floortex);
+      if(errorcode==0){
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+        tt->loaded=1;
+      }
     }
   }
 }
@@ -2350,6 +2363,123 @@ void UpdateBlockType(void){
   }
 }
 
+/* ------------------ GetBoxGeomCorners ------------------------ */
+
+void GetBoxGeomCorners(void){
+  float xmin, xmax, ymin, ymax, zmin, zmax;
+  int i;
+  float *xyz;
+  geomdata *geomi;
+  vertdata *verti;
+  geomlistdata *geomlisti;
+
+  have_box_geom_corners = 0;
+  if(geominfo==NULL||geominfo->geomlistinfo==NULL||auto_terrain==0||ngeominfo==0)return;
+
+  geomi = geominfo;
+  geomlisti = geomi->geomlistinfo-1;
+  if(geomlisti->nverts<=0)return;
+
+  have_box_geom_corners = 1;
+
+  verti = geomlisti->verts;
+  xyz = verti->xyz;
+
+  xmin = xyz[0];
+  xmax = xmin;
+  ymin = xyz[1];
+  ymax = ymin;
+  zmin = xyz[2];
+  zmax = zmin;
+
+  for(i = 1; i<geomlisti->nverts; i++){
+    verti = geomlisti->verts+i;
+    xyz = verti->xyz;
+    xmin = MIN(xyz[0], xmin);
+    xmax = MAX(xyz[0], xmax);
+    ymin = MIN(xyz[1], ymin);
+    ymax = MAX(xyz[1], ymax);
+    zmin = MIN(xyz[2], zmin);
+    zmax = MAX(xyz[2], zmax);
+  }
+
+  xmin = NORMALIZE_X(xmin);
+  xmax = NORMALIZE_X(xmax);
+  ymin = NORMALIZE_Y(ymin);
+  ymax = NORMALIZE_Y(ymax);
+  zmin = NORMALIZE_Z(zmin);
+  zmax = NORMALIZE_Z(zmax);
+
+  box_geom_corners[0][0] = xmin;
+  box_geom_corners[0][1] = ymin;
+  box_geom_corners[0][2] = zmin;
+
+  box_geom_corners[1][0] = xmax;
+  box_geom_corners[1][1] = ymin;
+  box_geom_corners[1][2] = zmin;
+
+  box_geom_corners[2][0] = xmax;
+  box_geom_corners[2][1] = ymax;
+  box_geom_corners[2][2] = zmin;
+
+  box_geom_corners[3][0] = xmin;
+  box_geom_corners[3][1] = ymax;
+  box_geom_corners[3][2] = zmin;
+
+  box_geom_corners[4][0] = xmin;
+  box_geom_corners[4][1] = ymin;
+  box_geom_corners[4][2] = zmax;
+
+  box_geom_corners[5][0] = xmax;
+  box_geom_corners[5][1] = ymin;
+  box_geom_corners[5][2] = zmax;
+
+  box_geom_corners[6][0] = xmax;
+  box_geom_corners[6][1] = ymax;
+  box_geom_corners[6][2] = zmax;
+
+  box_geom_corners[7][0] = xmin;
+  box_geom_corners[7][1] = ymax;
+  box_geom_corners[7][2] = zmax;
+
+}
+  
+  /* ------------------ GetBoxCorners ------------------------ */
+
+void GetBoxCorners(float xbar_local, float ybar_local, float zbar_local){
+  box_corners[0][0] = 0.0;
+  box_corners[0][1] = 0.0;
+  box_corners[0][2] = 0.0;
+
+  box_corners[1][0] = xbar_local;
+  box_corners[1][1] = 0.0;
+  box_corners[1][2] = 0.0;
+
+  box_corners[2][0] = xbar_local;
+  box_corners[2][1] = ybar_local;
+  box_corners[2][2] = 0.0;
+
+  box_corners[3][0] = 0.0;
+  box_corners[3][1] = ybar_local;
+  box_corners[3][2] = 0.0;
+
+  box_corners[4][0] = 0.0;
+  box_corners[4][1] = 0.0;
+  box_corners[4][2] = zbar_local;
+
+  box_corners[5][0] = xbar_local;
+  box_corners[5][1] = 0.0;
+  box_corners[5][2] = zbar_local;
+
+  box_corners[6][0] = xbar_local;
+  box_corners[6][1] = ybar_local;
+  box_corners[6][2] = zbar_local;
+
+  box_corners[7][0] = 0.0;
+  box_corners[7][1] = ybar_local;
+  box_corners[7][2] = zbar_local;
+}
+
 /* ------------------ UpdateMeshCoords ------------------------ */
 
 void UpdateMeshCoords(void){
@@ -2523,37 +2653,7 @@ void UpdateMeshCoords(void){
   ybar = NORMALIZE_Y(ybar);
   zbar = NORMALIZE_Z(zbar);
 
-  box_corners[0][0] = 0.0;
-  box_corners[0][1] = 0.0;
-  box_corners[0][2] = 0.0;
-
-  box_corners[1][0] = xbar;
-  box_corners[1][1] = 0.0;
-  box_corners[1][2] = 0.0;
-
-  box_corners[2][0] = xbar;
-  box_corners[2][1] = ybar;
-  box_corners[2][2] = 0.0;
-
-  box_corners[3][0] = 0.0;
-  box_corners[3][1] = ybar;
-  box_corners[3][2] = 0.0;
-
-  box_corners[4][0] = 0.0;
-  box_corners[4][1] = 0.0;
-  box_corners[4][2] = zbar;
-
-  box_corners[5][0] = xbar;
-  box_corners[5][1] = 0.0;
-  box_corners[5][2] = zbar;
-
-  box_corners[6][0] = xbar;
-  box_corners[6][1] = ybar;
-  box_corners[6][2] = zbar;
-
-  box_corners[7][0] = 0.0;
-  box_corners[7][1] = ybar;
-  box_corners[7][2] = zbar;
+  GetBoxCorners(xbar, ybar, zbar);
 
   for(i=0;i<nmeshes;i++){
     meshdata *meshi;
@@ -4189,7 +4289,9 @@ int ParsePRT5Process(bufferstreamdata *stream, char *buffer, int *nn_part_in, in
   parti->display = 0;
   parti->times = NULL;
   parti->timeslist = NULL;
+#ifdef pp_PART_HIST
   parti->histograms = NULL;
+#endif
   parti->bounds_set = 0;
   parti->global_min = NULL;
   parti->global_max = NULL;
@@ -4313,6 +4415,7 @@ int ParseBNDFProcess(bufferstreamdata *stream, char *buffer, int *nn_patch_in, i
   for(i = 0; i<6; i++){
     patchi->ijk[i] = -1;
   }
+  patchi->finalize = 1;
   patchi->skip = 0;
   patchi->version = version;
   patchi->ntimes = 0;
@@ -4862,6 +4965,8 @@ int ParseSLCFProcess(int option, bufferstreamdata *stream, char *buffer, int *nn
   sd->ntimes_old = 0;
   sd->globalmax = -1.0e30;
   sd->globalmin = -sd->globalmax;
+ // sd->file_size = 0;
+  sd->nframes = 0;
 #ifdef pp_NEWBOUND_DIALOG
   sd->file_min = 1.0;
   sd->file_max = 0.0;
@@ -5225,6 +5330,7 @@ int ReadSMV(bufferstreamdata *stream){
 
   int setGRID=0;
   int  i;
+  int have_auto_terrain_image=0;
 
   char buffer[256], buffers[6][256];
   patchdata *patchgeom;
@@ -5512,7 +5618,7 @@ int ReadSMV(bufferstreamdata *stream){
 
   FREEMEMORY(textureinfo);
   FREEMEMORY(surfinfo);
-  FREEMEMORY(terrain_texture);
+  FREEMEMORY(terrain_textures);
 
   if(cadgeominfo!=NULL)FreeCADInfo();
 
@@ -5553,8 +5659,7 @@ int ReadSMV(bufferstreamdata *stream){
 
 
     if(Match(buffer, "TITLE")==1){
-      char *fds_title_local;
-      int len_title;
+      char *fds_title_local, len_title;
 
       FGETS(buffer, 255, stream);
       fds_title_local = TrimFrontBack(buffer);
@@ -5715,25 +5820,44 @@ int ReadSMV(bufferstreamdata *stream){
       TrimBack(buff2);
       len_buffer = strlen(buff2);
       if(len_buffer>0&&strcmp(buff2, "null")!=0){
-        nterrain_texture = 1;
-        NewMemory((void **)&terrain_texture, sizeof(texturedata));
-        NewMemory((void **)&(terrain_texture->file), (len_buffer+1)*sizeof(char));
-        strcpy(terrain_texture->file, buff2);
+        nterrain_textures = 1;
+        NewMemory((void **)&terrain_textures, sizeof(texturedata));
+        NewMemory((void **)&(terrain_textures->file), (len_buffer+1)*sizeof(char));
+        strcpy(terrain_textures->file, buff2);
       }
+      have_auto_terrain_image=1;
       continue;
     }
     if(Match(buffer, "TERRAINIMAGE")==1){
       int len_buffer;
-      char *buff2;
+      char *buff2, *blank;
 
-      FGETS(buffer, 255, stream);
-      buff2 = TrimFrontBack(buffer);
-      len_buffer = strlen(buff2);
-      if(len_buffer>0&&strcmp(buff2, "null")!=0){
-        nterrain_texture = 1;
-        NewMemory((void **)&terrain_texture, sizeof(texturedata));
-        NewMemory((void **)&terrain_texture->file, (len_buffer+1)*sizeof(char));
-        strcpy(terrain_texture->file, buff2);
+      if(have_auto_terrain_image == 1){
+        FREEMEMORY(terrain_textures->file);
+        FREEMEMORY(terrain_textures);
+      }
+      nterrain_textures = 1;
+      blank = strchr(buffer,' ');
+      if(blank!=NULL){
+        int nvals=0;
+        
+        sscanf(blank+1,"%i",&nvals);
+        if(nvals!=0)nterrain_textures = MAX(nvals,0);
+      }
+      
+
+      if(nterrain_textures>0){
+        NewMemory((void **)&terrain_textures, nterrain_textures*sizeof(texturedata));
+
+        for(i=0;i<nterrain_textures;i++){
+          FGETS(buffer, 255, stream);
+          buff2 = TrimFrontBack(buffer);
+          len_buffer = strlen(buff2);
+          if(len_buffer>0&&strcmp(buff2, "null")!=0){
+            NewMemory((void **)&terrain_textures[i].file, (len_buffer+1)*sizeof(char));
+            strcpy(terrain_textures[i].file, buff2);
+          }
+        }
       }
       continue;
     }
@@ -6764,6 +6888,7 @@ int ReadSMV(bufferstreamdata *stream){
       }
       meshinfo[mesh_terrain].terrain = terraini;
       terraini->terrain_mesh = meshinfo+mesh_terrain;
+      terraini->defined = 0;
       nterraininfo++;
       continue;
     }
@@ -8088,7 +8213,7 @@ int ReadSMV(bufferstreamdata *stream){
 
   UpdateDeviceTextures();
   if(nsurfinfo>0||ndevice_texture_list>0){
-    if(NewMemory((void **)&textureinfo,(nsurfinfo+ndevice_texture_list+nterrain_texture)*sizeof(texturedata))==0)return 2;
+    if(NewMemory((void **)&textureinfo,(nsurfinfo+ndevice_texture_list+nterrain_textures)*sizeof(texturedata))==0)return 2;
   }
   if(use_graphics==1)InitTextures();
 
@@ -9894,6 +10019,11 @@ typedef struct {
   UpdateVSlices();
   if(update_slice==1)return 3;
 
+  GenerateSliceMenu();
+  if(generate_slice_info_from_commandline==1){
+    exit(0);
+  }
+
   GetBoundaryParams();
 
   GetGSliceParams();
@@ -10007,6 +10137,24 @@ typedef struct {
   ReadAllGeom();
   UpdateTriangles(GEOM_STATIC,GEOM_UPDATE_ALL);
   GetFaceInfo();
+  GetBoxGeomCorners();
+  if(ngeominfo>0&&auto_terrain==1){
+    int sizeof_vertices, sizeof_indices;
+
+    GenerateTerrainGeom(&terrain_vertices, &sizeof_vertices, &terrain_indices, &sizeof_indices, &terrain_nindices);
+  }
+#ifdef pp_WUI_VAO
+  have_terrain_vao = 0;
+  if(ngeominfo>0&&auto_terrain==1){
+    int sizeof_vertices, sizeof_indices;
+
+    have_terrain_vao = InitTerrainVAO(sizeof_vertices, sizeof_indices);
+  }
+  else{
+    have_terrain_vao = 0;
+  }
+#endif
+  
 
   SetupMeshWalls();
   update_windrose = 1;
@@ -10126,12 +10274,14 @@ void UpdateUseTextures(void){
       }
     }
   }
-  if(nterrain_texture>0){
-    texturedata *texti;
+  if(nterrain_textures>0){
+    for(i=0;i<nterrain_textures;i++){
+      texturedata *texti;
 
-    texti = textureinfo+ntextureinfo-1;
-    if(texti==terrain_texture){
-      texti->used = 1;
+      texti = textureinfo+ntextureinfo-1 + i;
+      if(texti==terrain_textures+i){
+        texti->used = 1;
+      }
     }
   }
   ntextures_loaded_used=0;
@@ -12607,6 +12757,24 @@ int ReadIni2(char *inifile, int localfile){
         sscanf(buffer, "%i", &show_path_knots);
         continue;
       }
+      if(Match(buffer, "SHOWGEOMTERRAIN")==1){
+        int nt;
+
+        if(fgets(buffer, 255, stream)==NULL)break;
+        sscanf(buffer, "%i %i %i %i %i",
+          &nt, &terrain_show_geometry_surface, &terrain_show_geometry_outline, &terrain_show_geometry_points, &terrain_showonly_top);
+        if(terrain_textures!=NULL){
+          for(i = 0; i<MIN(nt, nterrain_textures); i++){
+            texturedata *texti;
+
+            texti = terrain_textures+i;
+            if(fgets(buffer, 255, stream)==NULL)break;
+            sscanf(buffer, "%i ", &(texti->display));
+          }
+        }
+        continue;
+      }
+
       if(Match(buffer, "SHOWIGNITION") == 1){
         if(fgets(buffer, 255, stream) == NULL)break;
         sscanf(buffer, "%i %i", &vis_threshold, &vis_onlythreshold);
@@ -13573,6 +13741,15 @@ void WriteIniLocal(FILE *fileout){
     fprintf(fileout, " %f %f %f %f %f %f %i\n", begt[0], begt[1], begt[2], endt[0], endt[1], endt[2], ticki->nbars);
     fprintf(fileout, " %f %i %f %f %f %f\n", ticki->dlength, ticki->dir, rgbtemp[0], rgbtemp[1], rgbtemp[2], ticki->width);
   }
+  fprintf(fileout, "SHOWGEOMTERRAIN\n");
+  fprintf(fileout, "%i %i %i %i %i\n",
+    nterrain_textures, terrain_show_geometry_surface, terrain_show_geometry_outline, terrain_show_geometry_points, terrain_showonly_top);
+  for(i = 0; i<nterrain_textures; i++){
+    texturedata *texti;
+
+    texti = terrain_textures+i;
+    fprintf(fileout, "%i\n", texti->display);
+  }
 
   fprintf(fileout, "TOURCIRCLE\n");
   fprintf(fileout, "%f %f %f %f %f %f %f %f",
@@ -14031,7 +14208,16 @@ void WriteIni(int flag,char *filename){
     fprintf(fileout," %i\n",-1);
   }
   else{
-#ifdef pp_OSX
+#define USE_SPECIAL
+#ifndef pp_OSX
+#undef USE_SPECIAL
+#endif
+
+#ifndef pp_QUART
+#undef USE_SPECIAL
+#endif
+
+#ifdef USE_SPECIAL
     fprintf(fileout,"WINDOWWIDTH\n");
     fprintf(fileout," %i\n",screenWidth/2);
     fprintf(fileout,"WINDOWHEIGHT\n");
