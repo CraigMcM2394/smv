@@ -1,22 +1,28 @@
 # Utilities/Scripts
 
-This directory contains scripts for generating images and animations of FDS cases.  It also contains scripts for peforming tasks such setting up the graphics environment for the image generating scripts and scripts for identifying Git and compiler versions for the compilation sccripts. These notes are preliminary, a work in progress.
+This directory contains scripts for generating images and animations of FDS cases.  It also contains utility scripts used by other scripts in this repo, scripts for setting up the graphics environment for the image generating scripts and for identifying Git and compiler versions when building smoke iew. These notes are preliminary, a work in progress.
 
 ## fds2html.sh
 
-This script is used to generate an HTML page from a casename.smv, slice and boundary files. To use, add an alias to your startup file, typically .bashrc (change the first part to match your repo location):
+This script is used to generate an HTML page from a casename.smv, slice and boundary files. To use, add an alias to your startup file, typically .bashrc (change the ... in the first part of the path to match your repo location):
 
-```alias fds2html.sh="/home/gforney/FireModels_fork/smv/Utilities/Scripts/fds2html.sh"```
+```alias fds2html.sh=".../smv/Utilities/Scripts/fds2html.sh"```
 
 Then type `fds2html casename` at a command line. (add more description)
 
-## fds2mov.sh
+## fds2mp4.sh
 
-This script is used to generate an MP4 animation file from an FDS slice file.  For now, it uses smokeview built at smv/Build/smokeview/intel_linux_64 .  To use, add an alias to your startup file, typically .bashrc (change the first part to match your repo location):
+This script is used to generate an MP4 animation file from an FDS slice file.  It is run on a Linux system with a queing system. To use:
 
-```alias fds2mov.sh="/home/gforney/FireModels_fork/smv/Utilities/Scripts/fds2mov.sh"```
+1.  add the alias
 
-cd to a directory containing your case and type `fds2mov casename` .  You will see a list of slice files for this case such as
+```alias fds2mp4=".../smv/Utilities/Scripts/fds2mp4.sh"```
+
+to your startup file, typically .bashrc (change the ... in the first part to match your repo location).
+
+2.  Either use smokeview you built at smv/Build/smokeview/intel_linux_64 or use fds2mp4 with the -i option to use the Linux Smokeview installed with the latest [Smokeview Linux installer](https://drive.google.com/drive/folders/0B_wB1pJL2bFQc1F4cjJWY2duWTA?usp=sharing)
+
+3.  cd to a directory containing your case and type `fds2mp4 casename` .  You will see a list of slice files for this case such as
 ```
 index   quantity                      dir       position
     1   U-VELOCITY                      3     255.249954
@@ -30,34 +36,42 @@ index   quantity                      dir       position
     9   VELOCITY(terrain)               3           25.0
    ```
 
-After selecting an option such as `9`, LEVEL SET in this caes, you will see various options specifying how images are generated (number of processes, what queue to use) and whether to generate images and an animation or just images. fds2mov.sh creates a script (casename_slice_9.sh in this case) for generating images which it runs. You may also customize this script and run it later.
+After selecting a slice, index 9 in this case, you will see a menu for selecting various options such as scene viewpoints,  how images are generated (number of processes, what queue to use) and whether to generate images and an animation or just images. `fds2mp4` creates a script (casename_slice_9.sh in this case) which may be customized and run later.
 
 ```
-     quantity:  LEVEL SET VALUE(terrain)
-    processes: 1
-        queue: batch
-    smokeview: /...../smv/Build/smokeview/intel_linux_64/smokeview_linux_64
-      qsmv.sh: /...../smv/Utilities/Scripts/qsmv.sh
- image script: casename_slice_9.sh
+slice quantity:  LEVEL SET VALUE(terrain)
+     processes: 20
+         queue: batch2
+       mp4 dir: /var/www/html/gforney
+       PNG dir: .
+     smokeview: /home/gforney/FireModels_fork/smv/Build/smokeview/intel_linux_64/smokeview_linux_64
+       qsmv.sh: /home/gforney/FireModels_fork/smv/Utilities/Scripts/qsmv.sh
+     viewpoint:  view 1
+  image script: cogoleto_fire_2019_01_slice_6.sh
+         email: gforney@gmail.com
 
+a - define directory containing animation
 p - define number of processes
 q - define queue
+r - define directory containing rendered images
+v - select viewpoint
+m - select email address
 1 - generate PNG images
 2 - generate PNG images and an MP4 animation
 x - exit
 option:
 ```
 
-To generate an animation, select option 2.
+Select the queue, number of processes and an email address to send the animation.  Then to generate an animation, select option 2.
 
 ## qsmv.sh
 
 This script is used to run smokeview on a Linux cluster with a PBS or Slurm queuing system in order to generate images for creating an animation. qsmv.sh speeds up the rendering prrocess by running multiple instances of smokeview. Each instance renders a subset of the simulation time frames. By running multiple instances, the total time required to render simulation image frames is reduced.
 
-To get started, add the following line to your startup file, typically .bashrc 
-(change the first part of the following alias command to match where your repo is located):
+To get started, add the following alias to your startup file, typically .bashrc 
+(change the ... in the first part of the path to match where your repo is located):
 
-```alias qsmv.sh="/home/gforney/FireModels_fork/smv/Utilities/Scripts/qsmv.sh"```
+```alias qsmv.sh=".../smv/Utilities/Scripts/qsmv.sh"```
 
 To use qsmv.sh type:
 
@@ -92,7 +106,7 @@ runs smokeview on the case casename.smv using the script casename.ssf
 
 options:
  -e exe - full path of smokeview used to run case
-    [default: /home/gforney/FireModels_fork/smv/Build/smokeview/intel_linux_64/smokeview_intel_linux_64]
+    [default: .../smv/Build/smokeview/intel_linux_64/smokeview_intel_linux_64]
  -h   - show commonly used options
  -H   - show all options
  -p n - run n instances of smokeview each instance rendering 1/n'th of the total images
